@@ -34,12 +34,12 @@ class Config:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def get_groups(session, api_hash, api_id):
+def get_groups(session: str, api_hash: str, api_id: int) -> tuple[int, int]:
 
     from telethon.sync import TelegramClient
     from telethon.tl.types import Chat
 
-    groups = {}
+    groups: dict[str, list[tuple[int, int]]] = {}
 
     client = TelegramClient(session=session, api_hash=api_hash, api_id=api_id)
 
@@ -57,10 +57,9 @@ def get_groups(session, api_hash, api_id):
         else:
             continue
 
-
-    tracked_group_info = groups.get(input("Please specify the group name you want to track! :\n"), False) 
+    tracked_group_info = groups.get(input("Please specify the group name you want to track! :\n"), []) 
     while not tracked_group_info:
-        tracked_group_info = groups.get(input("Wrong group name, please give the exact full name! :\n"), False)
+        tracked_group_info = groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
 
     if len(tracked_group_info) == 1:
         tracked_group = tracked_group_info[0][0] 
@@ -73,9 +72,9 @@ def get_groups(session, api_hash, api_id):
         tracked_group = tracked_group_info[j][0] 
 
 
-    target_group_info = groups.get(input("Please specify the group name you want to send messages to! :\n"), False) 
+    target_group_info = groups.get(input("Please specify the group name you want to send messages to! :\n"), []) 
     while not target_group_info:
-        tracked_group_info =  groups.get(input("Wrong group name, please give the exact full name! :\n"), False)
+        tracked_group_info =  groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
 
     if len(target_group_info) == 1:
         target_group = target_group_info[0][0] 
@@ -127,15 +126,13 @@ def setup() -> Config:
 
     session = "session"
 
-    client = telethon.TelegramClient(session=session, api_hash=api_hash, api_id=api_id)
-
-    asyncio.run(auth(client, phone_number))
+    auth(session, api_hash, api_id, phone)
 
     cfg = Config(
         session=session,
         api_id=api_id,
         api_hash=api_hash,
-        phoner=phone,
+        phone=phone,
         tracked_group=-1,
         target_group=-1,
         use_forward=use_forward,
@@ -154,12 +151,12 @@ def main() -> None:
     else:
         cfg = Config.from_json()
 
-    if not pathlib.Path(f"{cfg.session_name}.session").is_file():
-        auth(session=cfg.session_name, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone_number)
+    if not pathlib.Path(f"{cfg.session}.session").is_file():
+        auth(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
 
 
     if cfg.target_group == -1 or cfg.tracked_group == -1:
-        tracked_group, target_group = get_groups(cfg)  # 5089441788, 4041853571
+        tracked_group, target_group = get_groups(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id)  # 5089441788, 4041853571
         if (tracked_group, target_group) == (-1, -1):
             exit()
         cfg.tracked_group = tracked_group
@@ -169,7 +166,7 @@ def main() -> None:
     if isinstance(cfg.target_group, int):
         cfg.target_group = telethon.types.PeerChat(cfg.target_group)
 
-    client = telethon.TelegramClient(session=cfg.session_name, api_hash=cfg.api_hash, api_id=cfg.api_id)
+    client = telethon.TelegramClient(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id)
 
     if cfg.send_notify_on_read:
 
@@ -192,7 +189,7 @@ def main() -> None:
 
     with client:
         print("Monitoring the situation...")
-        client.run_until_disconnected()
+        _ = client.run_until_disconnected()
 
     print("\nNo longer monitoring the situation. Restart the script to keep monitoring!")
 
