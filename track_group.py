@@ -34,7 +34,7 @@ class Config:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def get_groups(session: str, api_hash: str, api_id: int) -> tuple[int, int]:
+def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[int, int]:
 
     from telethon.sync import TelegramClient
     from telethon.tl.types import Chat
@@ -43,7 +43,7 @@ def get_groups(session: str, api_hash: str, api_id: int) -> tuple[int, int]:
 
     client = TelegramClient(session=session, api_hash=api_hash, api_id=api_id)
 
-    client.start(cfg.phone_number)
+    client.start(phone)
     dialogs = client.get_dialogs(archived=False)
     client.disconnect()
 
@@ -156,7 +156,7 @@ def main() -> None:
 
 
     if cfg.target_group == -1 or cfg.tracked_group == -1:
-        tracked_group, target_group = get_groups(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id)  # 5089441788, 4041853571
+        tracked_group, target_group = get_groups(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
         if (tracked_group, target_group) == (-1, -1):
             exit()
         cfg.tracked_group = tracked_group
@@ -182,9 +182,10 @@ def main() -> None:
                 await event.forward_to(cfg.target_group)
             except Exception:
                 cfg.use_forward = False
-                cfg.save_to_json()
+                _ = await client.send_message(entity=cfg.target_group, message="Forwarding not possible, resorting to just sending the text")
                 _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
         else:
+            # TODO: add user info
             _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
 
     with client:
