@@ -79,7 +79,7 @@ def group_id_find(groups, group_identifier: str | int, action) -> int:
             print(i + 1, ")" , info[1]) 
 
         j = int(input("Input number:\n"))
-        group_id = group_info[j][0] 
+        group_id = group_info[j-1][0] 
 
     return group_id
 
