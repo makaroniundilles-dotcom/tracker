@@ -191,23 +191,22 @@ def main() -> None:
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
     async def new_msg_react(event) -> None:
 
-
         if cfg.use_forward:
             try:
                 await event.forward_to(cfg.target_group)
             except Exception:
                 cfg.use_forward = False
-                _ = await client.send_message(entity=cfg.target_group, message="Forwarding not possible, resorting to just sending the text")
-                sender_name = ""
-                sender_id = event.message.from_id 
-                msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
-                _ = await client.send_message(entity=cfg.target_group, message=msg)
+                _ = await client.send_message(entity=cfg.target_group, message="Forwarding not possible, resorting to just sending the text\n(restart if you think it is possible to forward normally)")
+                # sender_name = ""
+                # sender_id = event.message.from_id 
+                # msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
+                _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
         else:
             # TODO: add user info that sent the message
-            sender_name = ""
-            sender_id = event.message.from_id 
-            msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
-            _ = await client.send_message(entity=cfg.target_group, message=msg)
+            # sender_name = ""
+            # sender_id = event.message.from_id 
+            # msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
+            _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
 
     # TODO: add error handling if network goes out
     with client:
