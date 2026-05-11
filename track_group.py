@@ -13,8 +13,8 @@ class Config:
     api_id: int
     api_hash: str
     phone: str
-    tracked_group: int
-    target_group: int | telethon.types.PeerChat
+    tracked_group: int | str
+    target_group: int | str | telethon.types.PeerChat
     use_forward: bool
     send_notify_on_read: bool
 
@@ -34,8 +34,7 @@ class Config:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[int, int]:
-
+def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dict[str, list[tuple[int, int]]]:
     from telethon.sync import TelegramClient
     from telethon.tl.types import Chat, Channel
 
@@ -47,7 +46,6 @@ def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[in
     print("Fetching group info...")
     dialogs = client.get_dialogs(archived=False)
     client.disconnect()
-
     for dialog in dialogs:
         entity = dialog.entity
         if isinstance(entity, (Chat, Channel)):
@@ -58,35 +56,32 @@ def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[in
         else:
             continue
 
-    tracked_group_info = groups.get(input("Please specify the group name you want to track! :\n"), []) 
-    while not tracked_group_info:
-        tracked_group_info = groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
+    return groups
 
-    if len(tracked_group_info) == 1:
-        tracked_group = tracked_group_info[0][0] 
+
+def group_id_find(groups, group_identifier: str | int, action) -> int:
+
+    if group_identifier == -1:
+        group_identifier = input(f"Please specify the group name you want to {action}! :\n")
+
+    elif isinstance(group_identifier, int):
+        return group_identifier
+        
+    group_info = groups.get(group_identifier, []) 
+    while not group_info:
+        group_info = groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
+
+    if len(group_info) == 1:
+        group_id = group_info[0][0] 
     else:
         print("Multiple groups with the same name! Type in the number corresponding to the matching participant count!")
-        for i, info in enumerate(tracked_group_info):
+        for i, info in enumerate(group_info):
             print(i + 1, ")" , info[1]) 
 
         j = int(input("Input number:\n"))
-        tracked_group = tracked_group_info[j][0] 
+        group_id = group_info[j][0] 
 
-    target_group_info = groups.get(input("Please specify the group name you want to send messages to! :\n"), []) 
-    while not target_group_info:
-        tracked_group_info =  groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
-
-    if len(target_group_info) == 1:
-        target_group = target_group_info[0][0] 
-    else:
-        print("Multiple groups with the same name! Type in the number corresponding to the matching participant count!")
-        for i, info in enumerate(target_group_info):
-            print(i + 1, ")" , info[1]) 
-
-        j = int(input("Input number:\n"))
-        target_group = target_group_info[j][0] 
-
-    return tracked_group, target_group
+    return group_id
 
 
 def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
@@ -120,24 +115,24 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
 def setup() -> Config:
 
     # Get telegram API ID and ensure it is convertible to an integer
-    try:
-        api_id = int(getpass.getpass("Input your api id:\n"))
-    except ValueError:  # TODO: narrow scope of exceptions
-        wrong_id = True
-        while wrong_id:
-            api_id = int(getpass.getpass("Incorrect api id format, try again! :\n"))
+    api_id_str = getpass.getpass("Input your api id:\n")
+    while not api_id_str.isdigit():
+        api_id_str = getpass.getpass("Incorrect api id format, try again! :\n")
+    api_id = int(api_id_str)
 
+    # Get API hash
     api_hash = getpass.getpass("Input your api hash:\n").strip()
 
+    # Get phone number
     phone = input("Input your phone number (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
     while not re.findall(r"\+[0-9]+", phone):
         phone = input("Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
 
+    # Ask for forwarding
     use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
     send_notify_on_read = True if input("Notify when your account reads messages? (y/n):\n").lower().startswith("y") else False
 
     session = "session"
-
     auth(session, api_hash, api_id, phone)
 
     cfg = Config(
@@ -167,10 +162,17 @@ def main() -> None:
         auth(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
 
 
-    if cfg.target_group == -1 or cfg.tracked_group == -1:
-        tracked_group, target_group = get_groups(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
-        if (tracked_group, target_group) == (-1, -1):
+    # Collect group ids if not given
+    if cfg.target_group == -1 or cfg.tracked_group == -1 or isinstance(cfg.target_group, str) or isinstance(cfg.tracked_group, str):
+
+        groups = groups_data_get(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
+        tracked_group = group_id_find(groups, cfg.tracked_group, action="track")
+        target_group = group_id_find(groups, cfg.target_group, action="relay messages to")
+
+        if tracked_group == -1 or target_group == -1:
+            print("Something went wrong with the group setup")
             exit()
+
         cfg.tracked_group = tracked_group
         cfg.target_group = target_group
         cfg.save_to_json()
@@ -189,6 +191,7 @@ def main() -> None:
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
     async def new_msg_react(event) -> None:
 
+
         if cfg.use_forward:
             try:
                 await event.forward_to(cfg.target_group)
@@ -196,13 +199,13 @@ def main() -> None:
                 cfg.use_forward = False
                 _ = await client.send_message(entity=cfg.target_group, message="Forwarding not possible, resorting to just sending the text")
                 sender_name = ""
-                sender_id = -1
+                sender_id = event.message.from_id 
                 msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
                 _ = await client.send_message(entity=cfg.target_group, message=msg)
         else:
             # TODO: add user info that sent the message
             sender_name = ""
-            sender_id = -1
+            sender_id = event.message.from_id 
             msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
             _ = await client.send_message(entity=cfg.target_group, message=msg)
 
