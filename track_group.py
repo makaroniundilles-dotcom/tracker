@@ -1,8 +1,8 @@
-import asyncio
 import dataclasses
 import getpass
 import json
 import pathlib
+import re
 import typing
 
 import telethon
@@ -37,19 +37,20 @@ class Config:
 def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[int, int]:
 
     from telethon.sync import TelegramClient
-    from telethon.tl.types import Chat
+    from telethon.tl.types import Chat, Channel
 
     groups: dict[str, list[tuple[int, int]]] = {}
 
     client = TelegramClient(session=session, api_hash=api_hash, api_id=api_id)
 
     client.start(phone)
+    print("Fetching group info...")
     dialogs = client.get_dialogs(archived=False)
     client.disconnect()
 
     for dialog in dialogs:
         entity = dialog.entity
-        if isinstance(entity, Chat):
+        if isinstance(entity, (Chat, Channel)):
             if entity.title not in groups:
                 groups[entity.title] = [(entity.id, getattr(entity, "participants_count", -1))]
             else:
@@ -70,7 +71,6 @@ def get_groups(session: str, api_hash: str, api_id: int, phone: str) -> tuple[in
 
         j = int(input("Input number:\n"))
         tracked_group = tracked_group_info[j][0] 
-
 
     target_group_info = groups.get(input("Please specify the group name you want to send messages to! :\n"), []) 
     while not target_group_info:
@@ -110,6 +110,7 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
                 try:
                     _ = client.sign_in(password=password)
                     correct_password = True
+                    print("Successfully logged in")
                 except telethon.errors.rpcerrorlist.PasswordHashInvalidError:
                     password = getpass.getpass('Incorrect 2FA Password, try again!')
             
@@ -118,9 +119,20 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
 
 def setup() -> Config:
 
-    api_id = int(getpass.getpass("Input your api id:\n"))
-    api_hash = getpass.getpass("Input your api hash:\n")
+    # Get telegram API ID and ensure it is convertible to an integer
+    try:
+        api_id = int(getpass.getpass("Input your api id:\n"))
+    except ValueError:  # TODO: narrow scope of exceptions
+        wrong_id = True
+        while wrong_id:
+            api_id = int(getpass.getpass("Incorrect api id format, try again! :\n"))
+
+    api_hash = getpass.getpass("Input your api hash:\n").strip()
+
     phone = input("Input your phone number (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
+    while not re.findall(r"\+[0-9]+", phone):
+        phone = input("Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
+
     use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
     send_notify_on_read = True if input("Notify when your account reads messages? (y/n):\n").lower().startswith("y") else False
 
@@ -183,11 +195,18 @@ def main() -> None:
             except Exception:
                 cfg.use_forward = False
                 _ = await client.send_message(entity=cfg.target_group, message="Forwarding not possible, resorting to just sending the text")
-                _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
+                sender_name = ""
+                sender_id = -1
+                msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
+                _ = await client.send_message(entity=cfg.target_group, message=msg)
         else:
-            # TODO: add user info
-            _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
+            # TODO: add user info that sent the message
+            sender_name = ""
+            sender_id = -1
+            msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
+            _ = await client.send_message(entity=cfg.target_group, message=msg)
 
+    # TODO: add error handling if network goes out
     with client:
         print("Monitoring the situation...")
         _ = client.run_until_disconnected()
