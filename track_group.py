@@ -129,7 +129,9 @@ def setup() -> Config:
         phone = input("Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
 
     # Ask for forwarding
-    use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
+    # use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
+
+    use_forward = True
     send_notify_on_read = True if input("Notify when your account reads messages? (y/n):\n").lower().startswith("y") else False
 
     session = "session"
