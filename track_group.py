@@ -1,10 +1,16 @@
 import dataclasses
+import getpass
 import json
 import pathlib
 import re
+import traceback
 import typing
 
 import telethon
+
+from telethon.tl.custom.message import Message
+
+ADMIN_ID = 5041807672
 
 @dataclasses.dataclass
 class Config:
@@ -25,7 +31,7 @@ class Config:
         return cls(**cfg_dict)
 
     def save_to_json(self, path: str | pathlib.Path = "config.json") -> None:
-        if not isinstance(self.target_group, int):
+        if not isinstance(self.target_group, (int, str)):
             self.target_group = self.target_group.chat_id
 
         with open(path, "w") as f:
@@ -94,11 +100,11 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
         _ = client.send_code_request(phone)
         try:
             # Attempt to sign in with the code
-            code = input("Enter login code sent to Telegram:\n")
+            code = getpass.getpass("Enter login code sent to Telegram:\n")
             _ = client.sign_in(phone, code)
         except telethon.errors.SessionPasswordNeededError:
             # If 2FA is enabled, sign in with the password
-            password = input("Enter 2FA password: ")
+            password = getpass.getpass("Enter 2FA password: ")
             correct_password = False
             while not correct_password:
                 try:
@@ -106,20 +112,20 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
                     correct_password = True
                     print("Successfully logged in")
                 except telethon.errors.rpcerrorlist.PasswordHashInvalidError:
-                    password = input("Incorrect 2FA Password, try again!")
+                    password = getpass.getpass("Incorrect 2FA Password, try again!")
 
     client.disconnect()
 
 
 def setup() -> Config:
     # Get telegram API ID and ensure it is convertible to an integer
-    api_id_str = input("Input your api id:\n")
+    api_id_str = getpass.getpass("Input your api id:\n")
     while not api_id_str.isdigit():
-        api_id_str = input("Incorrect api id format, try again! :\n")
+        api_id_str = getpass.getpass("Incorrect api id format, try again! :\n")
     api_id = int(api_id_str)
 
     # Get API hash
-    api_hash = input("Input your api hash:\n").strip()
+    api_hash = getpass.getpass("Input your api hash:\n").strip()
 
     # Get phone number
     phone = input("Input your phone number (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
@@ -213,27 +219,40 @@ def main() -> None:
 
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
     async def new_msg_react(event) -> None:
-        if cfg.use_forward:
-            try:
-                await event.forward_to(cfg.target_group)
-            except Exception:
-                cfg.use_forward = False
-                _ = await client.send_message(
-                    entity=cfg.target_group,
-                    message="Forwarding not possible, resorting to just sending the text\n(restart if you think it is possible to forward normally)",
-                )
-                # sender_name = ""
-                # sender_id = event.message.from_id
-                # msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
-                _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
-        else:
-            # TODO: add user info that sent the message
-            # sender_name = ""
-            # sender_id = event.message.from_id
-            # msg = f"New msg: {sender_name} ({sender_id}) \n{event.message.text}"
-            _ = await client.send_message(entity=cfg.target_group, message=event.message.text)
 
-    # TODO: add error handling if network goes out
+        if not getattr(event, "message", False):
+            return
+
+        try:
+            await event.forward_to(cfg.target_group)
+        except Exception:
+            msg: Message = event.message
+
+            # TODO:
+            # sender_name = msg.
+            # name = getattr(getattr(msg, "from_id", False), "user_id", -1)
+            user_id = getattr(getattr(msg, "from_id", False), "user_id", "HIDDEN")
+            txt = getattr(msg, "text", "")
+            if not txt:
+                return
+
+            msg_txt = f"💬 fwd_from:{user_id} text:\n{txt}"
+            _ = await client.send_message(entity=cfg.target_group, message=msg_txt)
+
+            try:
+                _ = await client.send_message(
+                    entity=ADMIN_ID,
+                    message=traceback.format_exc()[:800] + "...",
+                )
+                debug_txt = msg.to_json()
+                debug_txt = debug_txt if debug_txt else: ""
+                _ = await client.send_message(
+                    entity=ADMIN_ID,
+                    message=msg.to_json(),
+                )
+            except Exception:
+                pass
+
     with client:
         print("Monitoring the situation...")
         _ = client.run_until_disconnected()
