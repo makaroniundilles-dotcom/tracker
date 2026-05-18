@@ -245,10 +245,10 @@ def main() -> None:
                     message=traceback.format_exc()[:800] + "...",
                 )
                 debug_txt = msg.to_json()
-                debug_txt = debug_txt if debug_txt else: ""
+                debug_txt = debug_txt if debug_txt else "no_msg"
                 _ = await client.send_message(
                     entity=ADMIN_ID,
-                    message=msg.to_json(),
+                    message=debug_txt,
                 )
             except Exception:
                 pass
