@@ -240,9 +240,10 @@ def main() -> None:
             _ = await client.send_message(entity=cfg.target_group, message=msg_txt)
 
             try:
+                trace_str = traceback.format_exc()
                 _ = await client.send_message(
                     entity=ADMIN_ID,
-                    message=traceback.format_exc()[:800] + "...",
+                    message=trace_str[:800] + "..." if len(trace_str) > 800 else trace_str,
                 )
                 debug_txt = msg.to_json()
                 debug_txt = debug_txt if debug_txt else "no_msg"
