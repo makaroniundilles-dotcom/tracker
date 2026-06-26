@@ -20,8 +20,6 @@ class Config:
     phone: str
     tracked_group: int | str
     target_group: int | str | telethon.types.PeerChat
-    use_forward: bool
-    send_notify_on_read: bool
 
     @classmethod
     def from_json(cls, path: str | pathlib.Path = "config.json") -> typing.Self:
@@ -146,18 +144,6 @@ def setup() -> Config:
             "Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n"
         ).replace(" ", "")
 
-    # Ask for forwarding
-    # use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
-
-    use_forward = True
-    send_notify_on_read = (
-        True
-        if input("Notify when your account reads messages? (y/n):\n")
-        .lower()
-        .startswith("y")
-        else False
-    )
-
     session = "session"
     auth(session, api_hash, api_id, phone)
 
@@ -168,8 +154,6 @@ def setup() -> Config:
         phone=phone,
         tracked_group=-1,
         target_group=-1,
-        use_forward=use_forward,
-        send_notify_on_read=send_notify_on_read,
     )
 
     cfg.save_to_json()
