@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+cd /root/tracker
+source ./.venv/bin/activate
+python track_group.py
+deactivate

@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram Bot service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/track_group
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+WorkingDirectory=/root
+
+[Install]
+WantedBy=multi-user.target
