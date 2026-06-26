@@ -7,10 +7,10 @@ import traceback
 import typing
 
 import telethon
-
 from telethon.tl.custom.message import Message
-          
-ADMIN_ID = 5041807672
+
+ADMIN_ID = 1301596502
+RICKBOT_ID = 6126376117
 
 @dataclasses.dataclass
 class Config:
@@ -38,9 +38,11 @@ class Config:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dict[str, list[tuple[int, int]]]:
+def groups_data_get(
+    session: str, api_hash: str, api_id: int, phone: str
+) -> dict[str, list[tuple[int, int]]]:
     from telethon.sync import TelegramClient
-    from telethon.tl.types import Chat, Channel
+    from telethon.tl.types import Channel, Chat
 
     groups: dict[str, list[tuple[int, int]]] = {}
 
@@ -54,9 +56,13 @@ def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dic
         entity = dialog.entity
         if isinstance(entity, (Chat, Channel)):
             if entity.title not in groups:
-                groups[entity.title] = [(entity.id, getattr(entity, "participants_count", -1))]
+                groups[entity.title] = [
+                    (entity.id, getattr(entity, "participants_count", -1))
+                ]
             else:
-                groups[entity.title].append((entity.id, getattr(entity, "participants_count", -1)))
+                groups[entity.title].append(
+                    (entity.id, getattr(entity, "participants_count", -1))
+                )
         else:
             continue
 
@@ -65,14 +71,18 @@ def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dic
 
 def group_id_find(groups, group_identifier: str | int, action) -> int:
     if group_identifier == -1:
-        group_identifier = input(f"Please specify the group name you want to {action}! :\n")
+        group_identifier = input(
+            f"Please specify the group name you want to {action}! :\n"
+        )
 
     elif isinstance(group_identifier, int):
         return group_identifier
 
     group_info = groups.get(group_identifier, [])
     while not group_info:
-        group_info = groups.get(input("Wrong group name, please give the exact full name! :\n"), [])
+        group_info = groups.get(
+            input("Wrong group name, please give the exact full name! :\n"), []
+        )
 
     if len(group_info) == 1:
         group_id = group_info[0][0]
@@ -128,18 +138,24 @@ def setup() -> Config:
     api_hash = getpass.getpass("Input your api hash:\n").strip()
 
     # Get phone number
-    phone = input("Input your phone number (format - +00000000000 or +000 0000 0000):\n").replace(" ", "")
+    phone = input(
+        "Input your phone number (format - +00000000000 or +000 0000 0000):\n"
+    ).replace(" ", "")
     while not re.findall(r"\+[0-9]+", phone):
-        phone = input("Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n").replace(
-            " ", ""
-        )
+        phone = input(
+            "Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n"
+        ).replace(" ", "")
 
     # Ask for forwarding
     # use_forward = True if input("Try to use fowarding? (y/n):\n").lower().startswith("y") else False
 
     use_forward = True
     send_notify_on_read = (
-        True if input("Notify when your account reads messages? (y/n):\n").lower().startswith("y") else False
+        True
+        if input("Notify when your account reads messages? (y/n):\n")
+        .lower()
+        .startswith("y")
+        else False
     )
 
     session = "session"
@@ -163,10 +179,8 @@ def setup() -> Config:
 
 
 def main() -> None:
-    if not pathlib.Path("config.json").is_file():
-        cfg = setup()
-    else:
-        cfg = Config.from_json()
+
+    cfg = Config.from_json()
 
     if not pathlib.Path(f"{cfg.session}.session").is_file():
         auth(
@@ -190,7 +204,9 @@ def main() -> None:
             phone=cfg.phone,
         )
         tracked_group = group_id_find(groups, cfg.tracked_group, action="track")
-        target_group = group_id_find(groups, cfg.target_group, action="relay messages to")
+        target_group = group_id_find(
+            groups, cfg.target_group, action="relay messages to"
+        )
 
         if tracked_group == -1 or target_group == -1:
             print("Something went wrong with the group setup")
@@ -209,50 +225,22 @@ def main() -> None:
         api_id=cfg.api_id,
     )
 
-    if cfg.send_notify_on_read:
-
-        @client.on(telethon.events.MessageRead(chats={cfg.tracked_group}, inbox=True))
-        async def msg_read_react(event) -> None:
-            _ = await client.send_message(
-                entity=cfg.target_group, message="!WARNING! I just read the messages"
-            )
-
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
     async def new_msg_react(event) -> None:
-
         if not getattr(event, "message", False):
             return
-
         try:
             await event.forward_to(cfg.target_group)
         except Exception:
             msg: Message = event.message
-
-            # TODO:
-            # sender_name = msg.
-            # name = getattr(getattr(msg, "from_id", False), "user_id", -1)
             user_id = getattr(getattr(msg, "from_id", False), "user_id", "HIDDEN")
             txt = getattr(msg, "text", "")
             if not txt:
                 return
-
+            if user_id == RICKBOT_ID:
+                user_id = "RickBot"
             msg_txt = f"💬 fwd_from:{user_id} text:\n{txt}"
             _ = await client.send_message(entity=cfg.target_group, message=msg_txt)
-
-            try:
-                trace_str = traceback.format_exc()
-                _ = await client.send_message(
-                    entity=ADMIN_ID,
-                    message=trace_str[:800] + "..." if len(trace_str) > 800 else trace_str,
-                )
-                debug_txt = msg.to_json()
-                debug_txt = debug_txt if debug_txt else "no_msg"
-                _ = await client.send_message(
-                    entity=ADMIN_ID,
-                    message=debug_txt,
-                )
-            except Exception:
-                pass
 
     with client:
         print("Monitoring the situation...")
