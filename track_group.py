@@ -200,8 +200,8 @@ def main() -> None:
         cfg.target_group = target_group
         cfg.save_to_json()
 
-    if isinstance(cfg.target_group, int):
-        cfg.target_group = telethon.types.PeerChannel(cfg.target_group)
+    # if isinstance(cfg.target_group, int):
+    #     cfg.target_group = telethon.types.PeerChannel(cfg.target_group)
 
     client = telethon.TelegramClient(
         session=cfg.session,
