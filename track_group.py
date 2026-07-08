@@ -19,7 +19,7 @@ class Config:
     api_hash: str
     phone: str
     tracked_group: int | str
-    target_group: int | str | telethon.types.PeerChat
+    target_group: int | str | telethon.types.PeerChannel 
 
     @classmethod
     def from_json(cls, path: str | pathlib.Path = "config.json") -> typing.Self:
@@ -201,7 +201,7 @@ def main() -> None:
         cfg.save_to_json()
 
     if isinstance(cfg.target_group, int):
-        cfg.target_group = telethon.types.PeerChat(cfg.target_group)
+        cfg.target_group = telethon.types.PeerChannel(cfg.target_group)
 
     client = telethon.TelegramClient(
         session=cfg.session,
