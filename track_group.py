@@ -214,6 +214,7 @@ def main() -> None:
         if not getattr(event, "message", False):
             return
         try:
+            target = await client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
             await event.forward_to(cfg.target_group)
         except Exception:
             msg: Message = event.message
