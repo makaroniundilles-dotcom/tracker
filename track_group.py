@@ -225,7 +225,8 @@ def main() -> None:
             if user_id == RICKBOT_ID:
                 user_id = "RickBot"
             msg_txt = f"💬 fwd_from:{user_id} text:\n{txt}"
-            _ = await client.send_message(entity=cfg.target_group, message=msg_txt)
+            target = await client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
+            _ = await client.send_message(entity=target, message=msg_txt)
 
     with client:
         print("Monitoring the situation...")
