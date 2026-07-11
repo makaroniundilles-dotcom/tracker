@@ -3,13 +3,14 @@ import getpass
 import json
 import pathlib
 import typing
+import argparse
 
 # TODO: improve tracebacks and logs
-# TODO: improve adding more groups
-# TODO: get targets to improve forwarding speeds
+# TODO: simplify the deployment process so that it is easy to migrate platform
 
 import telethon
 from telethon.tl.custom.message import Message
+
 
 RICKBOT_ID = 6126376117
 
@@ -35,29 +36,63 @@ class Config:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dict[str, list[tuple[int, int]]]:
+
+def args_parse():
+    parser = argparse.ArgumentParser(
+        description="Telegram tracker script"
+    )
+
+    parser.add_argument(
+        "-g",
+        "--get-groups",
+        action="store_true",
+        help="Fetch groups, otherwise track groups using the provided config file",
+    )
+
+    return parser.parse_args()
+
+
+def groups_data_get() -> None:
     from telethon.sync import TelegramClient
     from telethon.tl.types import Channel, Chat
 
-    groups: dict[str, list[tuple[int, int]]] = {}
+    cfg = Config.from_json()
+    print(cfg)
 
-    client = TelegramClient(session=session, api_hash=api_hash, api_id=api_id)
+    if not pathlib.Path(f"{cfg.session}.session").is_file():
+        auth(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
 
-    client.start(phone)
-    print("Fetching group info...")
-    dialogs = client.get_dialogs(archived=False)
-    client.disconnect()
+    with TelegramClient(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id) as client:
+        print("Fetching group info...")
+        dialogs = client.get_dialogs(archived=False)
+
+    groups_data = []
     for dialog in dialogs:
         entity = dialog.entity
-        if isinstance(entity, (Chat, Channel)):
-            if entity.title not in groups:
-                groups[entity.title] = [(entity.id, getattr(entity, "participants_count", -1))]
-            else:
-                groups[entity.title].append((entity.id, getattr(entity, "participants_count", -1)))
-        else:
-            continue
 
-    return groups
+        if isinstance(entity, (Channel, Chat)):
+            group_info = {
+                "id": entity.id,
+                "name": entity.title,
+                "type": "channel" if isinstance(entity, Channel) else "group",
+                "is_private": getattr(entity, "access_hash", None) is not None,
+                "participant_count": getattr(entity, "participants_count", "N/A"),
+            }
+
+            # Additional info for channels
+            if isinstance(entity, Channel):
+                group_info["is_broadcast"] = entity.broadcast
+                group_info["is_megagroup"] = entity.megagroup
+                group_info["username"] = getattr(entity, "username", None)
+
+            groups_data.append(group_info)
+
+    # Save to JSON file
+    with open("telegram_groups.json", "w", encoding="utf-8") as f:
+        json.dump(groups_data, f, indent=2, ensure_ascii=False)
+
+    print(f"\nSuccessfully saved {len(groups_data)} groups to 'telegram_groups.json'")
+    print(f"\nAccess using command - 'less telegram_groups.json'")
 
 
 def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
@@ -91,25 +126,18 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
 def get_target(session: str, api_hash: str, api_id: int, target_group: int):
     from telethon.sync import TelegramClient
 
-    client = TelegramClient(session=session, api_id=api_id, api_hash=api_hash)
-
-    client.connect()
-
-    target = client.get_input_entity(telethon.types.PeerChannel(target_group))
-
-    client.disconnect()
+    with TelegramClient(session=session, api_id=api_id, api_hash=api_hash) as client:
+        target = client.get_input_entity(telethon.types.PeerChannel(target_group))
 
     return target
 
 
-def main() -> None:
+def runner() -> None:
     cfg = Config.from_json()
-
     if not pathlib.Path(f"{cfg.session}.session").is_file():
         auth(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
 
     client = telethon.TelegramClient(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id)
-
     TARGET = get_target(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, target_group=cfg.target_group)
 
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
@@ -134,6 +162,16 @@ def main() -> None:
         _ = client.run_until_disconnected()
 
     print("\nNo longer monitoring the situation. Restart the script to keep monitoring!")
+
+
+def main():
+
+    args = args_parse()
+
+    if not args.get_groups:
+        runner()
+    else:
+        groups_data_get()
 
 
 if __name__ == "__main__":
