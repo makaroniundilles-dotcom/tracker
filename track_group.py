@@ -100,7 +100,7 @@ def get_target(session: str, api_hash: str, api_id: int, target_group: int):
 
     client.connect()
 
-    target = client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
+    target = client.get_input_entity(telethon.types.PeerChannel(target_group))
 
     client.disconnect()
 
