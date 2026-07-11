@@ -2,9 +2,11 @@ import dataclasses
 import getpass
 import json
 import pathlib
-import re
-import traceback
 import typing
+
+# TODO: improve tracebacks and logs
+# TODO: improve adding more groups
+# TODO: get targets to improve forwarding speeds
 
 import telethon
 from telethon.tl.custom.message import Message
@@ -12,14 +14,15 @@ from telethon.tl.custom.message import Message
 ADMIN_ID = 1301596502
 RICKBOT_ID = 6126376117
 
+
 @dataclasses.dataclass
 class Config:
     session: str
     api_id: int
     api_hash: str
     phone: str
-    tracked_group: int | str
-    target_group: int | str | telethon.types.PeerChannel 
+    tracked_group: int
+    target_group: int
 
     @classmethod
     def from_json(cls, path: str | pathlib.Path = "config.json") -> typing.Self:
@@ -29,16 +32,12 @@ class Config:
         return cls(**cfg_dict)
 
     def save_to_json(self, path: str | pathlib.Path = "config.json") -> None:
-        if not isinstance(self.target_group, (int, str)):
-            self.target_group = self.target_group.chat_id
-
         with open(path, "w") as f:
             _ = f.write(json.dumps(dataclasses.asdict(self), indent=4))
 
 
-def groups_data_get(
-    session: str, api_hash: str, api_id: int, phone: str
-) -> dict[str, list[tuple[int, int]]]:
+def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dict[str, list[tuple[int, int]]]:
+
     from telethon.sync import TelegramClient
     from telethon.tl.types import Channel, Chat
 
@@ -65,36 +64,6 @@ def groups_data_get(
             continue
 
     return groups
-
-
-def group_id_find(groups, group_identifier: str | int, action) -> int:
-    if group_identifier == -1:
-        group_identifier = input(
-            f"Please specify the group name you want to {action}! :\n"
-        )
-
-    elif isinstance(group_identifier, int):
-        return group_identifier
-
-    group_info = groups.get(group_identifier, [])
-    while not group_info:
-        group_info = groups.get(
-            input("Wrong group name, please give the exact full name! :\n"), []
-        )
-
-    if len(group_info) == 1:
-        group_id = group_info[0][0]
-    else:
-        print(
-            "Multiple groups with the same name! Type in the number corresponding to the matching participant count!"
-        )
-        for i, info in enumerate(group_info):
-            print(i + 1, ")", info[1])
-
-        j = int(input("Input number:\n"))
-        group_id = group_info[j - 1][0]
-
-    return group_id
 
 
 def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
@@ -124,42 +93,18 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
 
     client.disconnect()
 
+def get_target(session: str, api_hash: str, api_id: int, target_group: int):
+    from telethon.sync import TelegramClient
 
-def setup() -> Config:
-    # Get telegram API ID and ensure it is convertible to an integer
-    api_id_str = getpass.getpass("Input your api id:\n")
-    while not api_id_str.isdigit():
-        api_id_str = getpass.getpass("Incorrect api id format, try again! :\n")
-    api_id = int(api_id_str)
+    client = TelegramClient(session=session, api_id=api_id, api_hash=api_hash)
 
-    # Get API hash
-    api_hash = getpass.getpass("Input your api hash:\n").strip()
+    client.connect()
 
-    # Get phone number
-    phone = input(
-        "Input your phone number (format - +00000000000 or +000 0000 0000):\n"
-    ).replace(" ", "")
-    while not re.findall(r"\+[0-9]+", phone):
-        phone = input(
-            "Incorrect format, try again! (format - +00000000000 or +000 0000 0000):\n"
-        ).replace(" ", "")
+    target = client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
 
-    session = "session"
-    auth(session, api_hash, api_id, phone)
+    client.disconnect()
 
-    cfg = Config(
-        session=session,
-        api_id=api_id,
-        api_hash=api_hash,
-        phone=phone,
-        tracked_group=-1,
-        target_group=-1,
-    )
-
-    cfg.save_to_json()
-    print("config file 'config.json' generated in your project directory!")
-
-    return cfg
+    return target
 
 
 def main() -> None:
@@ -167,55 +112,18 @@ def main() -> None:
     cfg = Config.from_json()
 
     if not pathlib.Path(f"{cfg.session}.session").is_file():
-        auth(
-            session=cfg.session,
-            api_hash=cfg.api_hash,
-            api_id=cfg.api_id,
-            phone=cfg.phone,
-        )
+        auth(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, phone=cfg.phone)
 
-    # Collect group ids if not given
-    if (
-        cfg.target_group == -1
-        or cfg.tracked_group == -1
-        or isinstance(cfg.target_group, str)
-        or isinstance(cfg.tracked_group, str)
-    ):
-        groups = groups_data_get(
-            session=cfg.session,
-            api_hash=cfg.api_hash,
-            api_id=cfg.api_id,
-            phone=cfg.phone,
-        )
-        tracked_group = group_id_find(groups, cfg.tracked_group, action="track")
-        target_group = group_id_find(
-            groups, cfg.target_group, action="relay messages to"
-        )
+    client = telethon.TelegramClient(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id)
 
-        if tracked_group == -1 or target_group == -1:
-            print("Something went wrong with the group setup")
-            exit()
-
-        cfg.tracked_group = tracked_group
-        cfg.target_group = target_group
-        cfg.save_to_json()
-
-    # if isinstance(cfg.target_group, int):
-    #     cfg.target_group = telethon.types.PeerChannel(cfg.target_group)
-
-    client = telethon.TelegramClient(
-        session=cfg.session,
-        api_hash=cfg.api_hash,
-        api_id=cfg.api_id,
-    )
+    TARGET = get_target(session=cfg.session, api_hash=cfg.api_hash, api_id=cfg.api_id, target_group=cfg.target_group)
 
     @client.on(telethon.events.NewMessage(chats={cfg.tracked_group}))
     async def new_msg_react(event) -> None:
         if not getattr(event, "message", False):
             return
         try:
-            target = await client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
-            await event.forward_to(cfg.target_group)
+            await event.forward_to(TARGET)
         except Exception:
             msg: Message = event.message
             user_id = getattr(getattr(msg, "from_id", False), "user_id", "HIDDEN")
@@ -225,8 +133,7 @@ def main() -> None:
             if user_id == RICKBOT_ID:
                 user_id = "RickBot"
             msg_txt = f"💬 fwd_from:{user_id} text:\n{txt}"
-            target = await client.get_input_entity(telethon.types.PeerChannel(cfg.target_group))
-            _ = await client.send_message(entity=target, message=msg_txt)
+            _ = await client.send_message(entity=TARGET, message=msg_txt)
 
     with client:
         print("Monitoring the situation...")
