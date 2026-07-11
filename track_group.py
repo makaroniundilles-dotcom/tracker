@@ -11,7 +11,6 @@ import typing
 import telethon
 from telethon.tl.custom.message import Message
 
-ADMIN_ID = 1301596502
 RICKBOT_ID = 6126376117
 
 
@@ -37,7 +36,6 @@ class Config:
 
 
 def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dict[str, list[tuple[int, int]]]:
-
     from telethon.sync import TelegramClient
     from telethon.tl.types import Channel, Chat
 
@@ -53,13 +51,9 @@ def groups_data_get(session: str, api_hash: str, api_id: int, phone: str) -> dic
         entity = dialog.entity
         if isinstance(entity, (Chat, Channel)):
             if entity.title not in groups:
-                groups[entity.title] = [
-                    (entity.id, getattr(entity, "participants_count", -1))
-                ]
+                groups[entity.title] = [(entity.id, getattr(entity, "participants_count", -1))]
             else:
-                groups[entity.title].append(
-                    (entity.id, getattr(entity, "participants_count", -1))
-                )
+                groups[entity.title].append((entity.id, getattr(entity, "participants_count", -1)))
         else:
             continue
 
@@ -93,6 +87,7 @@ def auth(session: str, api_hash: str, api_id: int, phone: str) -> None:
 
     client.disconnect()
 
+
 def get_target(session: str, api_hash: str, api_id: int, target_group: int):
     from telethon.sync import TelegramClient
 
@@ -108,7 +103,6 @@ def get_target(session: str, api_hash: str, api_id: int, target_group: int):
 
 
 def main() -> None:
-
     cfg = Config.from_json()
 
     if not pathlib.Path(f"{cfg.session}.session").is_file():
