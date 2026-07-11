@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# cd /root/tracker && \
+cd /root/tracker && \
 source ./.venv/bin/activate &&\
 python track_group.py -g &&\
 less telegram_groups.json &&\
